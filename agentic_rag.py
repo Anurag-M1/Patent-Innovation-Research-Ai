@@ -25,7 +25,7 @@ def display_menu():
 
 
 def run_complete_analysis():
-    """Run the complete patent trend analysis using CrewAI agents"""
+    """Run the complete patent trend analysis using OpenRouter + OpenSearch"""
     print("\nRunning comprehensive patent analysis...")
     print("This may take several minutes depending on the data volume.")
 

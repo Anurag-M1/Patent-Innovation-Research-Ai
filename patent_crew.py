@@ -5,10 +5,6 @@ from datetime import datetime
 
 import requests
 
-# Use CrewAI and import from crewai.tools
-from crewai import Agent, Crew, Process, Task
-from crewai.tools import BaseTool  # Use CrewAI's own tool system
-
 from openrouter_client import (
     get_openrouter_base_url,
     get_openrouter_headers,
@@ -80,71 +76,13 @@ TOPIC_PATTERNS = {
 }
 
 
-def parse_patent_results(patents_data):
-    """Parse patent records from tool-formatted text into normalized dict rows."""
-    rows = []
-    blocks = [block.strip() for block in patents_data.split("\n\n") if block.strip()]
-
-    for block in blocks:
-        title_match = re.search(r"Title:\s*(.+)", block)
-        date_match = re.search(r"Date:\s*(.+)", block)
-        patent_id_match = re.search(r"Patent ID:\s*(.+)", block)
-        abstract_match = re.search(r"Abstract:\s*(.+)", block, re.DOTALL)
-
-        if not any([title_match, date_match, patent_id_match, abstract_match]):
-            continue
-
-        rows.append(
-            {
-                "title": title_match.group(1).strip() if title_match else "N/A",
-                "date": date_match.group(1).strip() if date_match else "N/A",
-                "patent_id": (
-                    patent_id_match.group(1).strip() if patent_id_match else "N/A"
-                ),
-                "abstract": abstract_match.group(1).strip() if abstract_match else "",
-            }
-        )
-
-    return rows
-
-
-def extract_year(date_text):
-    """Extract publication year from date text."""
-    match = re.search(r"(19|20)\d{2}", date_text or "")
-    return match.group(0) if match else "Unknown"
-
-
-def detect_topics(text):
-    """Infer battery sub-topics from patent title + abstract text."""
-    lowered = text.lower()
-    topics = []
-    for topic, patterns in TOPIC_PATTERNS.items():
-        if any(pattern in lowered for pattern in patterns):
-            topics.append(topic)
-    return topics or ["other"]
-
-
-def extract_keywords(text):
-    """Extract normalized keywords from free text."""
-    words = re.findall(r"[a-zA-Z][a-zA-Z-]{3,}", text.lower())
-    return [word for word in words if word not in STOPWORDS]
-
-
 def normalize_openrouter_model(model_name):
-    """Normalize any model input into an OpenRouter model id."""
     if model_name.startswith("openrouter/"):
-        return model_name[len("openrouter/"):]
+        return model_name[len("openrouter/") :]
     return model_name
 
 
-def to_crewai_model(model_name):
-    """Convert a model id to CrewAI/LiteLLM OpenRouter format."""
-    normalized = normalize_openrouter_model(model_name)
-    return f"openrouter/{normalized}"
-
-
 def check_openrouter_availability():
-    """Check if OpenRouter is reachable and return available model ids."""
     try:
         return list_openrouter_models(timeout=8)
     except Exception as e:
@@ -152,9 +90,7 @@ def check_openrouter_availability():
         return []
 
 
-# Test model with a simple query to verify it works
 def test_model(model_name):
-    """Test if the model can respond to a simple prompt."""
     try:
         payload = {
             "model": normalize_openrouter_model(model_name),
@@ -181,402 +117,223 @@ def test_model(model_name):
         return False
 
 
-# Define custom tools by extending BaseTool from CrewAI
-class SearchPatentsTool(BaseTool):
-    name: str = "search_patents"
-    description: str = "Search for patents matching a query"
-
-    def _run(self, query: str, top_k: int = 20) -> str:
-        client = get_default_opensearch_client()
-        index_name = get_opensearch_index_name()
-
-        search_query = {
-            "size": top_k,
-            "query": {"bool": {"must": [{"match": {"abstract": query}}]}},
-            "_source": ["title", "abstract", "publication_date", "patent_id"],
-        }
-
-        try:
-            response = client.search(index=index_name, body=search_query)
-            results = response["hits"]["hits"]
-
-            # Format results as a string for better LLM consumption
-            formatted_results = []
-            for i, hit in enumerate(results):
-                source = hit["_source"]
-                formatted_results.append(
-                    f"{i+1}. Title: {source.get('title', 'N/A')}\n"
-                    f"   Date: {source.get('publication_date', 'N/A')}\n"
-                    f"   Patent ID: {source.get('patent_id', 'N/A')}\n"
-                    f"   Abstract: {source.get('abstract', 'N/A')[:200]}...\n"
-                )
-
-            return "\n".join(formatted_results)
-        except Exception as e:
-            return f"Error searching patents: {str(e)}"
+def extract_year(date_text):
+    match = re.search(r"(19|20)\d{2}", date_text or "")
+    return match.group(0) if match else "Unknown"
 
 
-class SearchPatentsByDateRangeTool(BaseTool):
-    name: str = "search_patents_by_date_range"
-    description: str = "Search for patents in a specific date range"
-
-    def _run(self, query: str, start_date: str, end_date: str, top_k: int = 30) -> str:
-        client = get_default_opensearch_client()
-        index_name = get_opensearch_index_name()
-
-        search_query = {
-            "size": top_k,
-            "query": {
-                "bool": {
-                    "must": [{"match": {"abstract": query}}],
-                    "filter": [
-                        {
-                            "range": {
-                                "publication_date": {"gte": start_date, "lte": end_date}
-                            }
-                        }
-                    ],
-                }
-            },
-            "_source": ["title", "abstract", "publication_date", "patent_id"],
-        }
-
-        try:
-            response = client.search(index=index_name, body=search_query)
-            results = response["hits"]["hits"]
-
-            # Format results as a string
-            formatted_results = []
-            for i, hit in enumerate(results):
-                source = hit["_source"]
-                formatted_results.append(
-                    f"{i+1}. Title: {source.get('title', 'N/A')}\n"
-                    f"   Date: {source.get('publication_date', 'N/A')}\n"
-                    f"   Patent ID: {source.get('patent_id', 'N/A')}\n"
-                    f"   Abstract: {source.get('abstract', 'N/A')[:200]}...\n"
-                )
-
-            return "\n".join(formatted_results)
-        except Exception as e:
-            return f"Error searching patents: {str(e)}"
+def detect_topics(text):
+    lowered = text.lower()
+    topics = []
+    for topic, patterns in TOPIC_PATTERNS.items():
+        if any(pattern in lowered for pattern in patterns):
+            topics.append(topic)
+    return topics or ["other"]
 
 
-class AnalyzePatentTrendsTool(BaseTool):
-    name: str = "analyze_patent_trends"
-    description: str = "Analyze trends in patent data"
-
-    def _run(self, patents_data: str) -> str:
-        rows = parse_patent_results(patents_data)
-        if not rows:
-            return "No patent records were provided for trend analysis."
-
-        year_counts = Counter(extract_year(row["date"]) for row in rows)
-
-        topic_counts = Counter()
-        keyword_counts = Counter()
-        for row in rows:
-            combined_text = f"{row['title']} {row['abstract']}"
-            topic_counts.update(detect_topics(combined_text))
-            keyword_counts.update(extract_keywords(combined_text))
-
-        unique_ids = {
-            row["patent_id"]
-            for row in rows
-            if row["patent_id"] and row["patent_id"].upper() not in {"N/A", "NONE"}
-        }
-
-        known_years = {year: count for year, count in year_counts.items() if year != "Unknown"}
-        top_year = max(known_years, key=known_years.get) if known_years else "Unknown"
-        top_topics = topic_counts.most_common(5)
-        top_keywords = keyword_counts.most_common(10)
-
-        summary_lines = [
-            "Patent Trend Analysis",
-            f"- Records analyzed: {len(rows)}",
-            f"- Unique patent IDs: {len(unique_ids)}",
-            "",
-            "Publication trend by year:",
-        ]
-
-        for year, count in sorted(year_counts.items(), key=lambda x: x[0], reverse=True):
-            summary_lines.append(f"- {year}: {count}")
-
-        summary_lines.append("")
-        summary_lines.append("Top technology themes:")
-        for topic, count in top_topics:
-            summary_lines.append(f"- {topic.replace('_', ' ')}: {count}")
-
-        summary_lines.append("")
-        summary_lines.append("Top recurring keywords:")
-        for keyword, count in top_keywords:
-            summary_lines.append(f"- {keyword}: {count}")
-
-        summary_lines.append("")
-        summary_lines.append("Key insights:")
-        summary_lines.append(
-            f"- Highest concentration of publications appears in {top_year}."
-        )
-        if top_topics:
-            summary_lines.append(
-                f"- Dominant topic cluster: {top_topics[0][0].replace('_', ' ')}."
-            )
-        if len(known_years) >= 2:
-            newest_year = max(known_years)
-            oldest_year = min(known_years)
-            trend = "upward" if known_years[newest_year] >= known_years[oldest_year] else "downward"
-            summary_lines.append(
-                f"- Publication volume trend from {oldest_year} to {newest_year}: {trend}."
-            )
-
-        return "\n".join(summary_lines)
+def extract_keywords(text):
+    words = re.findall(r"[a-zA-Z][a-zA-Z-]{3,}", text.lower())
+    return [word for word in words if word not in STOPWORDS]
 
 
-# Define our agents
-def create_patent_analysis_crew(model_name=DEFAULT_OPENROUTER_MODEL):
-    """
-    Create a CrewAI crew for patent analysis using OpenRouter.
+def _search_patents(research_area, top_k=40):
+    client = get_default_opensearch_client()
+    index_name = get_opensearch_index_name()
 
-    Args:
-        model_name: OpenRouter model id to use
+    search_query = {
+        "size": top_k,
+        "query": {
+            "bool": {
+                "should": [
+                    {"match": {"title": {"query": research_area, "boost": 2}}},
+                    {"match": {"abstract": research_area}},
+                ],
+                "minimum_should_match": 1,
+            }
+        },
+        "_source": ["title", "abstract", "publication_date", "patent_id"],
+    }
 
-    Returns:
-        Crew: A CrewAI crew configured for patent analysis
-    """
-    # Check OpenRouter availability
-    available_models = check_openrouter_availability()
-    if not available_models:
-        raise RuntimeError(
-            "OpenRouter API is not available. Check OPENROUTER_API_KEY and network access."
+    response = client.search(index=index_name, body=search_query)
+    return response.get("hits", {}).get("hits", [])
+
+
+def _build_structured_summary(research_area, hits):
+    rows = []
+    for hit in hits:
+        source = hit.get("_source", {})
+        rows.append(
+            {
+                "title": source.get("title", "N/A"),
+                "abstract": source.get("abstract", ""),
+                "date": source.get("publication_date", "Unknown"),
+                "patent_id": source.get("patent_id", "N/A"),
+            }
         )
 
-    normalized_model = normalize_openrouter_model(model_name)
-    if normalized_model not in available_models:
-        print(
-            f"Warning: model '{normalized_model}' was not found in OpenRouter model catalog. "
-            "Proceeding with request anyway."
-        )
+    year_counts = Counter(extract_year(row["date"]) for row in rows)
+    topic_counts = Counter()
+    keyword_counts = Counter()
 
-    # Test configured model
-    if not test_model(normalized_model):
-        raise RuntimeError(f"Model {normalized_model} is not responding to test prompts.")
+    for row in rows:
+        combined_text = f"{row['title']} {row['abstract']}"
+        topic_counts.update(detect_topics(combined_text))
+        keyword_counts.update(extract_keywords(combined_text))
 
-    print("Model found and tested successfully")
+    known_years = {year: count for year, count in year_counts.items() if year != "Unknown"}
+    top_year = max(known_years, key=known_years.get) if known_years else "Unknown"
 
-    llm = to_crewai_model(normalized_model)
-
-    # Create tools using CrewAI's BaseTool subclasses
-    tools = [
-        SearchPatentsTool(),
-        SearchPatentsByDateRangeTool(),
-        AnalyzePatentTrendsTool(),
+    lines = [
+        "Patent Trend Analysis",
+        f"- Research area: {research_area}",
+        f"- Records analyzed: {len(rows)}",
+        f"- Peak publication year: {top_year}",
+        "",
+        "Publication trend by year:",
     ]
 
-    # Create agents with the correct tools
-    research_director = Agent(
-        role="Research Director",
-        goal="Coordinate research efforts and define the scope of patent analysis",
-        backstory="You are an experienced research director who specializes in technological innovation analysis.",
-        verbose=True,
-        allow_delegation=True,
-        llm=llm,
-        tools=tools,
-    )
+    for year, count in sorted(year_counts.items(), key=lambda x: x[0], reverse=True):
+        lines.append(f"- {year}: {count}")
 
-    patent_retriever = Agent(
-        role="Patent Retriever",
-        goal="Find and retrieve the most relevant patents related to the research area",
-        backstory="You are a specialized patent researcher with expertise in information retrieval systems.",
-        verbose=True,
-        allow_delegation=False,
-        llm=llm,
-        tools=tools,
-    )
+    lines.append("")
+    lines.append("Top technology themes:")
+    for topic, count in topic_counts.most_common(8):
+        lines.append(f"- {topic.replace('_', ' ')}: {count}")
 
-    data_analyst = Agent(
-        role="Patent Data Analyst",
-        goal="Analyze patent data to identify trends, patterns, and emerging technologies",
-        backstory="You are a data scientist specializing in patent analysis with years of experience in technology forecasting.",
-        verbose=True,
-        allow_delegation=False,
-        llm=llm,
-        tools=tools,
-    )
+    lines.append("")
+    lines.append("Top recurring keywords:")
+    for keyword, count in keyword_counts.most_common(12):
+        lines.append(f"- {keyword}: {count}")
 
-    innovation_forecaster = Agent(
-        role="Innovation Forecaster",
-        goal="Predict future innovations and technologies based on patent trends",
-        backstory="You are an expert in technological forecasting with a track record of accurate predictions in emerging technologies.",
-        verbose=True,
-        allow_delegation=False,
-        llm=llm,
-        tools=tools,
-    )
+    lines.append("")
+    lines.append("Sample patents:")
+    for i, row in enumerate(rows[:10], start=1):
+        abstract = (row["abstract"] or "").replace("\n", " ").strip()
+        abstract = (abstract[:220] + "...") if len(abstract) > 220 else abstract
+        lines.append(
+            f"{i}. {row['title']} | {row['date']} | {row['patent_id']} | {abstract}"
+        )
 
-    # Create tasks with shorter, simpler descriptions (to reduce LLM load)
-    task1 = Task(
-        description="""
-        Define a research plan for {research_area} patents:
-        1. Key technology areas to focus on
-        2. Time periods for analysis (focus on last 3 years)
-        3. Specific technological aspects to analyze
-        """,
-        expected_output="""A research plan with focus areas, time periods, and key technological aspects.""",
-        agent=research_director,
-    )
+    return "\n".join(lines)
 
-    task2 = Task(
-        description="""
-        Using the research plan, retrieve patents related to {research_area} from the last 3 years.
-        Use the search_patents and search_patents_by_date_range tools to gather comprehensive data.
-        Focus on the most relevant and innovative patents.
-        Group patents by sub-technologies within the target domain.
-        Provide a summary of the retrieved patents, including:
-        - Total number of patents found
-        - Key companies/assignees
-        - Main technological categories
-        """,
-        expected_output="""A comprehensive patent retrieval report containing:
-        - Summary of total patents found
-        - List of key patents grouped by sub-technology
-        - Analysis of top companies/assignees
-        - Overview of main technological categories
-        - List of the most innovative patents with summaries
-        """,
-        agent=patent_retriever,
-        dependencies=[task1],
-    )
 
-    task3 = Task(
-        description="""
-        Analyze the retrieved patent data to identify trends and patterns:
-        1. Identify growing vs. declining areas of innovation
-        2. Analyze technology evolution over time
-        3. Identify key companies and their focus areas
-        4. Determine emerging sub-technologies within {research_area}
-        5. Analyze patent claims to understand technological improvements
-        
-        Create a comprehensive analysis with specific trends, supported by data.
-        """,
-        expected_output="""A trend analysis report containing:
-        - Identification of growing vs. declining technology areas
-        - Timeline of technology evolution
-        - Company focus analysis
-        - Emerging sub-technologies list
-        - Technical improvement trends
-        - Data-backed conclusions on innovation patterns
-        """,
-        agent=data_analyst,
-        dependencies=[task2],
-    )
+def _generate_forecast_with_openrouter(research_area, model_name, structured_summary):
+    prompt = f"""
+You are a patent innovation analyst.
+Use the dataset summary below to produce a focused report.
 
-    task4 = Task(
-        description="""
-        Based on the patent analysis, predict future innovations in {research_area}:
-        1. Identify technologies likely to see breakthroughs in the next 2-3 years
-        2. Recommend specific areas for R&D investment
-        3. Predict which companies are positioned to lead innovation
-        4. Identify potential disruptive technologies
-        5. Outline specific technical improvements likely to emerge
-        
-        Create a detailed forecast with specific technology predictions and justification.
-        """,
-        expected_output="""A future innovation forecast containing:
-        - Predicted breakthrough technologies for next 2-3 years
-        - Prioritized list of R&D investment areas
-        - Companies likely to lead future innovation
-        - Potential disruptive technologies and their impact
-        - Timeline of expected technical improvements
-        - Justification for all predictions based on patent data
-        """,
-        agent=innovation_forecaster,
-        dependencies=[task3],
-    )
+Output format:
+1) Executive summary (5 bullets)
+2) Emerging sub-technologies (ranked)
+3) Key companies/assignees likely to lead
+4) 12-24 month innovation forecast
+5) Recommended R&D bets (top 5)
+6) Risks and blind spots
 
-    # Create the crew with debugging enabled
-    crew = Crew(
-        agents=[
-            research_director,
-            patent_retriever,
-            data_analyst,
-            innovation_forecaster,
+Research area: {research_area}
+
+Dataset summary:
+{structured_summary}
+""".strip()
+
+    payload = {
+        "model": normalize_openrouter_model(model_name),
+        "messages": [
+            {"role": "system", "content": "Be concise, factual, and data-grounded."},
+            {"role": "user", "content": prompt},
         ],
-        tasks=[task1, task2, task3, task4],
-        verbose=True,
-        process=Process.sequential,
-        cache=False,  # Disable cache to prevent issues
+        "temperature": 0.2,
+        "max_tokens": 1400,
+    }
+
+    response = requests.post(
+        f"{get_openrouter_base_url()}/chat/completions",
+        headers=get_openrouter_headers(),
+        json=payload,
+        timeout=90,
+    )
+    response.raise_for_status()
+
+    return (
+        response.json()
+        .get("choices", [{}])[0]
+        .get("message", {})
+        .get("content", "")
+        .strip()
     )
 
-    return crew
 
-
-def run_patent_analysis(
-    research_area, model_name=DEFAULT_OPENROUTER_MODEL
-):
-    """
-    Run the patent analysis crew for the specified research area.
-
-    Args:
-        research_area (str): The research area to analyze
-        model_name (str): OpenRouter model id to use
-
-    Returns:
-        str: Analysis results
-    """
+def run_patent_analysis(research_area, model_name=DEFAULT_OPENROUTER_MODEL):
     if not research_area or not research_area.strip():
         return "Analysis failed: research area is required."
 
-    try:
-        crew = create_patent_analysis_crew(model_name)
-        result = crew.kickoff(inputs={"research_area": research_area})
+    research_area = research_area.strip()
+    model_name = (model_name or DEFAULT_OPENROUTER_MODEL).strip()
 
-        # Extract the string output from the CrewOutput object
-        if hasattr(result, "output"):
-            # Recent CrewAI versions store results in the 'output' attribute
-            return result.output
-        elif hasattr(result, "result"):
-            # Some versions might use 'result'
-            return result.result
-        else:
-            # Last resort - convert to string
-            return str(result)
+    try:
+        available_models = check_openrouter_availability()
+        normalized_model = normalize_openrouter_model(model_name)
+        if available_models and normalized_model not in available_models:
+            print(
+                f"Warning: model '{normalized_model}' not found in OpenRouter catalog; continuing."
+            )
+
+        if not test_model(normalized_model):
+            raise RuntimeError(f"Model {normalized_model} is not responding to test prompts.")
+
+        hits = _search_patents(research_area, top_k=40)
+        if not hits:
+            return (
+                f"No patents found for '{research_area}'. "
+                "Check OPENSEARCH_INDEX data and try a broader query."
+            )
+
+        structured_summary = _build_structured_summary(research_area, hits)
+
+        try:
+            forecast = _generate_forecast_with_openrouter(
+                research_area, normalized_model, structured_summary
+            )
+        except Exception as llm_error:
+            forecast = (
+                "LLM forecast generation failed, returning deterministic trend summary only.\n"
+                f"Reason: {llm_error}"
+            )
+
+        return (
+            f"Model used: {normalized_model}\n"
+            f"Records retrieved: {len(hits)}\n\n"
+            f"{structured_summary}\n\n"
+            f"Innovation Forecast\n{forecast}"
+        )
     except Exception as e:
         return (
             f"Analysis failed: {str(e)}\n\nTroubleshooting tips:\n"
-            + "1. Set OPENROUTER_API_KEY in your environment or .env file\n"
-            + "2. Use a valid OpenRouter model id (for example: qwen/qwen3-coder)\n"
-            + "3. Verify OpenRouter API access and account quota\n"
-            + "4. Try a simpler model or reduce task complexity"
+            "1. Set OPENROUTER_API_KEY in your environment or .env file\n"
+            "2. Use a valid OpenRouter model id (for example: qwen/qwen3-coder)\n"
+            "3. Verify OpenRouter API access and account quota\n"
+            "4. Ensure OpenSearch is reachable and OPENSEARCH_INDEX has documents"
         )
 
 
 if __name__ == "__main__":
-    # Get the research area from user input
-    research_area = input(
-        "Enter the research area to analyze: "
-    )
+    research_area = input("Enter the research area to analyze: ").strip()
     if not research_area:
         print("Research area is required.")
         raise SystemExit(1)
 
-    # Get the model name from user input
     model_name = input(
         f"Enter the OpenRouter model to use (default: {DEFAULT_OPENROUTER_MODEL}): "
-    )
+    ).strip()
     if not model_name:
         model_name = DEFAULT_OPENROUTER_MODEL
 
-    # Run the analysis
     result = run_patent_analysis(research_area, model_name)
 
-    # Save results to file
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     filename = f"patent_analysis_{timestamp}.txt"
 
-    # Ensure result is a string before writing to file
-    if not isinstance(result, str):
-        result = str(result)
-
     with open(filename, "w") as f:
-        f.write(result)
+        f.write(str(result))
 
     print(f"Analysis completed and saved to {filename}")

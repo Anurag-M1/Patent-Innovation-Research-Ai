@@ -1,6 +1,6 @@
 # Patent Research Assistant
 
-AI project for patent discovery, trend analysis, and forecasting using OpenRouter, OpenSearch, and CrewAI.
+AI project for patent discovery, trend analysis, and forecasting using OpenRouter + OpenSearch.
 
 ## Architecture
 
@@ -25,7 +25,7 @@ AI project for patent discovery, trend analysis, and forecasting using OpenRoute
 | Intelligence Layer           |
 | - OpenRouter chat models     |
 | - OpenRouter embeddings      |
-| - CrewAI orchestration       |
+| - Lightweight analysis flow  |
 +--------------+---------------+
                |
                v
@@ -36,29 +36,10 @@ AI project for patent discovery, trend analysis, and forecasting using OpenRoute
 +------------------------------+
 ```
 
-## Files
+## Dependency Files
 
-- `/Users/anurag/Desktop/PATENT INNOVATION & RESEARCH AI/backend_api.py`: backend API
-- `/Users/anurag/Desktop/PATENT INNOVATION & RESEARCH AI/simple_ui.py`: Streamlit UI
-- `/Users/anurag/Desktop/PATENT INNOVATION & RESEARCH AI/agentic_rag.py`: CLI app
-- `/Users/anurag/Desktop/PATENT INNOVATION & RESEARCH AI/patent_crew.py`: multi-agent analysis
-- `/Users/anurag/Desktop/PATENT INNOVATION & RESEARCH AI/patent_search_tools.py`: search tools
-- `/Users/anurag/Desktop/PATENT INNOVATION & RESEARCH AI/opensearch_client.py`: OpenSearch client/env config
-
-## Requirements
-
-- Python 3.11+
-- OpenSearch instance
-- OpenRouter API key
-
-## Install
-
-```bash
-cd '/Users/anurag/Desktop/PATENT INNOVATION & RESEARCH AI'
-python3.11 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-```
+- `/Users/anurag/Desktop/PATENT INNOVATION & RESEARCH AI/requirements.txt`: backend-only (Vercel-safe)
+- `/Users/anurag/Desktop/PATENT INNOVATION & RESEARCH AI/requirements-local.txt`: local UI + ingestion extras
 
 ## Environment
 
@@ -72,48 +53,60 @@ OPENROUTER_EMBEDDING_MODEL=openai/text-embedding-3-small
 OPENSEARCH_HOST=localhost
 OPENSEARCH_PORT=9200
 OPENSEARCH_INDEX=patents
-# optional:
+# Optional:
 # OPENSEARCH_USE_SSL=false
 # OPENSEARCH_VERIFY_CERTS=false
 # OPENSEARCH_USERNAME=
 # OPENSEARCH_PASSWORD=
 
-# optional (for UI -> backend mode)
+# Optional for UI->API mode
 # BACKEND_API_URL=http://localhost:8000
 ```
 
-## Run
-
-### 1) Start backend API
+## Local Run
 
 ```bash
 cd '/Users/anurag/Desktop/PATENT INNOVATION & RESEARCH AI'
+python3.11 -m venv .venv
 source .venv/bin/activate
+pip install -r requirements-local.txt
+```
+
+Start backend:
+
+```bash
 uvicorn backend_api:app --host 0.0.0.0 --port 8000
 ```
 
-### 2) Start Streamlit UI (same UI, backend-enabled)
+Start UI (same UI):
 
 ```bash
-cd '/Users/anurag/Desktop/PATENT INNOVATION & RESEARCH AI'
-source .venv/bin/activate
 export BACKEND_API_URL='http://127.0.0.1:8000'
 streamlit run simple_ui.py
 ```
 
-### 3) CLI mode
+## Vercel Deploy (Backend)
 
-```bash
-cd '/Users/anurag/Desktop/PATENT INNOVATION & RESEARCH AI'
-source .venv/bin/activate
-python agentic_rag.py
+This repo includes `/Users/anurag/Desktop/PATENT INNOVATION & RESEARCH AI/main.py` as FastAPI entrypoint for Vercel.
+
+1. Import repo in Vercel.
+2. Framework preset: Other.
+3. Root directory: project root.
+4. Env vars in Vercel:
+   - `OPENROUTER_API_KEY`
+   - `OPENROUTER_MODEL=qwen/qwen3-coder`
+   - `OPENROUTER_EMBEDDING_MODEL=openai/text-embedding-3-small`
+   - `OPENSEARCH_HOST`
+   - `OPENSEARCH_PORT`
+   - `OPENSEARCH_INDEX`
+   - optional OpenSearch auth/SSL vars
+5. Redeploy.
+
+Health check endpoint:
+
+```text
+https://<your-vercel-domain>/health
 ```
-
-## Notes
-
-- UI layout is unchanged; only backend wiring is updated.
-- If `BACKEND_API_URL` is not set, `simple_ui.py` falls back to direct local calls.
-- For production deployment, host backend on a long-running service (not serverless runtime).
 
 ## Credits
 
