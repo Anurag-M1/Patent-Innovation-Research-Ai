@@ -42,6 +42,16 @@ class IterativeSearchRequest(BaseModel):
     top_k: int = Field(default=20, ge=1, le=100)
 
 
+@app.get("/")
+def root():
+    return {
+        "name": "Patent Research Backend",
+        "status": "ok",
+        "health": "/health",
+        "docs": "/docs",
+    }
+
+
 @app.get("/health")
 def health():
     return {"status": "ok"}
@@ -97,7 +107,9 @@ def status():
 
 @app.post("/analysis")
 def analysis(payload: AnalysisRequest):
-    model_name = (payload.model_name or os.getenv("OPENROUTER_MODEL", "qwen/qwen3-coder")).strip()
+    model_name = (
+        payload.model_name or os.getenv("OPENROUTER_MODEL", "qwen/qwen3-coder")
+    ).strip()
     result = run_patent_analysis(payload.research_area.strip(), model_name)
     return {"result": result}
 
@@ -113,7 +125,10 @@ def search(payload: SearchRequest):
     elif search_type == "hybrid":
         results = hybrid_search(payload.query.strip(), top_k=payload.top_k)
     else:
-        raise HTTPException(status_code=400, detail="search_type must be one of: keyword, semantic, hybrid")
+        raise HTTPException(
+            status_code=400,
+            detail="search_type must be one of: keyword, semantic, hybrid",
+        )
 
     return {"results": results}
 
