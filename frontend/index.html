@@ -36,14 +36,7 @@
       margin-bottom: 14px;
     }
     .title { margin: 0; font-size: 28px; }
-    .sub { margin: 6px 0 0; color: var(--muted); }
-    .backend-row {
-      display: grid;
-      grid-template-columns: 1fr auto;
-      gap: 10px;
-      margin-top: 14px;
-    }
-    .tabs {
+    .sub { margin: 6px 0 0; color: var(--muted); }    .tabs {
       display: flex;
       gap: 8px;
       margin-bottom: 12px;
@@ -130,7 +123,6 @@
     }
     @media (max-width: 800px) {
       .grid-2 { grid-template-columns: 1fr; }
-      .backend-row { grid-template-columns: 1fr; }
     }
   </style>
 </head>
@@ -139,15 +131,6 @@
     <div class="header">
       <h1 class="title">Patent Research Assistant</h1>
       <p class="sub">Simple UI for analysis, search, and system checks</p>
-      <div class="backend-row">
-        <div>
-          <label for="backendUrl">Backend API URL (Render)</label>
-          <input id="backendUrl" placeholder="https://your-backend.onrender.com" />
-        </div>
-        <div class="row" style="align-self:end;">
-          <button id="saveBackend" class="btn secondary">Save URL</button>
-        </div>
-      </div>
     </div>
 
     <div class="tabs">
@@ -245,14 +228,13 @@
   </div>
 
   <script>
-    const backendInput = document.getElementById('backendUrl');
-    const saveBackendBtn = document.getElementById('saveBackend');
-    const stored = localStorage.getItem('backend_api_url') || '';
-    backendInput.value = stored;
+    const BACKEND_API_URL = "https://your-render-backend-url.onrender.com";
 
     function getBackendUrl() {
-      const value = backendInput.value.trim().replace(/\/$/, '');
-      if (!value) throw new Error('Set Backend API URL first.');
+      const value = BACKEND_API_URL.trim().replace(/\/$/, "");
+      if (!value || value.includes("your-render-backend-url")) {
+        throw new Error("Backend API URL is not configured.");
+      }
       return value;
     }
 
@@ -306,12 +288,6 @@
       }
       return res.json();
     }
-
-    saveBackendBtn.addEventListener('click', () => {
-      localStorage.setItem('backend_api_url', backendInput.value.trim());
-      alert('Backend URL saved');
-    });
-
     document.querySelectorAll('.tab').forEach((btn) => {
       btn.addEventListener('click', () => {
         document.querySelectorAll('.tab').forEach((x) => x.classList.remove('active'));
