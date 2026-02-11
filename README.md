@@ -1,6 +1,8 @@
 # Patent Research Assistant
 
-AI project for patent discovery, trend analysis, and forecasting using OpenRouter + OpenSearch.
+AI project for patent discovery, trend analysis, and forecasting using OpenRouter + OpenSearch + CrewAI
+
+<img width="1285" height="665" alt="PIR" src="https://github.com/user-attachments/assets/6d9f76e5-a41b-4664-886d-b7b95e865ba7" />
 
 ## Architecture
 
