@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 
 from embedding import get_embedding
 from openrouter_client import get_openrouter_base_url, get_openrouter_headers
-from opensearch_client import get_opensearch_client
+from opensearch_client import get_default_opensearch_client
 from patent_crew import run_patent_analysis
 from patent_search_tools import hybrid_search, iterative_search, keyword_search, semantic_search
 
@@ -16,6 +16,26 @@ load_dotenv()
 st.set_page_config(page_title="Patent Research Assistant", layout="wide")
 st.title("Patent Research Assistant")
 st.caption("Simple UI for analysis, search, and system checks")
+
+
+def get_backend_api_url():
+    return os.getenv("BACKEND_API_URL", "").strip().rstrip("/")
+
+
+def use_backend_api():
+    return bool(get_backend_api_url())
+
+
+def api_get(path):
+    response = requests.get(f"{get_backend_api_url()}{path}", timeout=60)
+    response.raise_for_status()
+    return response.json()
+
+
+def api_post(path, payload):
+    response = requests.post(f"{get_backend_api_url()}{path}", json=payload, timeout=300)
+    response.raise_for_status()
+    return response.json()
 
 
 def render_results(results):
@@ -50,15 +70,27 @@ with tab_analysis:
             st.warning("Research area is required.")
         else:
             with st.spinner("Running analysis..."):
-                result = run_patent_analysis(research_area.strip(), model_name.strip())
+                try:
+                    if use_backend_api():
+                        payload = {
+                            "research_area": research_area.strip(),
+                            "model_name": model_name.strip(),
+                        }
+                        result = api_post("/analysis", payload).get("result", "")
+                    else:
+                        result = run_patent_analysis(research_area.strip(), model_name.strip())
+                except Exception as exc:
+                    st.error(f"Analysis failed: {exc}")
+                    result = ""
 
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            filename = f"patent_analysis_{timestamp}.txt"
-            with open(filename, "w") as file:
-                file.write(str(result))
+            if result:
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                filename = f"patent_analysis_{timestamp}.txt"
+                with open(filename, "w") as file:
+                    file.write(str(result))
 
-            st.success(f"Analysis complete. Saved to `{filename}`")
-            st.text_area("Analysis output", value=str(result), height=360)
+                st.success(f"Analysis complete. Saved to `{filename}`")
+                st.text_area("Analysis output", value=str(result), height=360)
 
 with tab_search:
     st.subheader("Search Patents")
@@ -71,12 +103,23 @@ with tab_search:
             st.warning("Search query is required.")
         else:
             with st.spinner("Searching..."):
-                if search_type == "Keyword":
-                    results = keyword_search(query.strip(), top_k=top_k)
-                elif search_type == "Semantic":
-                    results = semantic_search(query.strip(), top_k=top_k)
-                else:
-                    results = hybrid_search(query.strip(), top_k=top_k)
+                try:
+                    if use_backend_api():
+                        payload = {
+                            "query": query.strip(),
+                            "search_type": search_type.lower(),
+                            "top_k": top_k,
+                        }
+                        results = api_post("/search", payload).get("results", [])
+                    elif search_type == "Keyword":
+                        results = keyword_search(query.strip(), top_k=top_k)
+                    elif search_type == "Semantic":
+                        results = semantic_search(query.strip(), top_k=top_k)
+                    else:
+                        results = hybrid_search(query.strip(), top_k=top_k)
+                except Exception as exc:
+                    st.error(f"Search failed: {exc}")
+                    results = []
             render_results(results)
 
 with tab_iterative:
@@ -90,43 +133,83 @@ with tab_iterative:
             st.warning("Initial query is required.")
         else:
             with st.spinner("Exploring..."):
-                results = iterative_search(
-                    iterative_query.strip(),
-                    refinement_steps=steps,
-                    top_k=top_k_iter,
-                )
+                try:
+                    if use_backend_api():
+                        payload = {
+                            "query": iterative_query.strip(),
+                            "refinement_steps": steps,
+                            "top_k": top_k_iter,
+                        }
+                        results = api_post("/iterative-search", payload).get("results", [])
+                    else:
+                        results = iterative_search(
+                            iterative_query.strip(),
+                            refinement_steps=steps,
+                            top_k=top_k_iter,
+                        )
+                except Exception as exc:
+                    st.error(f"Iterative search failed: {exc}")
+                    results = []
             render_results(results)
 
 with tab_status:
     st.subheader("System Status")
 
     if st.button("Check status"):
-        try:
-            client = get_opensearch_client("localhost", 9200)
-            indices = client.cat.indices(format="json")
-            st.success("OpenSearch: connected")
-            st.write(f"Indices found: {len(indices)}")
-        except Exception as exc:
-            st.error(f"OpenSearch: failed ({exc})")
+        if use_backend_api():
+            try:
+                status = api_get("/status")
+            except Exception as exc:
+                st.error(f"Backend API: failed ({exc})")
+                status = None
 
-        try:
-            response = requests.get(
-                f"{get_openrouter_base_url()}/models",
-                headers=get_openrouter_headers(),
-                timeout=10,
-            )
-            response.raise_for_status()
-            models = response.json().get("data", [])
-            st.success("OpenRouter: connected")
-            st.write(f"Models visible: {len(models)}")
-        except Exception as exc:
-            st.error(f"OpenRouter: failed ({exc})")
+            if status:
+                opensearch = status.get("opensearch", {})
+                if opensearch.get("ok"):
+                    st.success("OpenSearch: connected")
+                    st.write(f"Indices found: {opensearch.get('indices', 0)}")
+                else:
+                    st.error(f"OpenSearch: failed ({opensearch.get('message', 'Unknown error')})")
 
-        try:
-            vector = get_embedding("status-check")
-            st.success(f"Embedding model: OK (dimension {len(vector)})")
-        except Exception as exc:
-            st.error(f"Embedding model: failed ({exc})")
+                openrouter = status.get("openrouter", {})
+                if openrouter.get("ok"):
+                    st.success("OpenRouter: connected")
+                    st.write(f"Models visible: {openrouter.get('models', 0)}")
+                else:
+                    st.error(f"OpenRouter: failed ({openrouter.get('message', 'Unknown error')})")
+
+                embedding = status.get("embedding", {})
+                if embedding.get("ok"):
+                    st.success(f"Embedding model: OK (dimension {embedding.get('dimension', 0)})")
+                else:
+                    st.error(f"Embedding model: failed ({embedding.get('message', 'Unknown error')})")
+        else:
+            try:
+                client = get_default_opensearch_client()
+                indices = client.cat.indices(format="json")
+                st.success("OpenSearch: connected")
+                st.write(f"Indices found: {len(indices)}")
+            except Exception as exc:
+                st.error(f"OpenSearch: failed ({exc})")
+
+            try:
+                response = requests.get(
+                    f"{get_openrouter_base_url()}/models",
+                    headers=get_openrouter_headers(),
+                    timeout=10,
+                )
+                response.raise_for_status()
+                models = response.json().get("data", [])
+                st.success("OpenRouter: connected")
+                st.write(f"Models visible: {len(models)}")
+            except Exception as exc:
+                st.error(f"OpenRouter: failed ({exc})")
+
+            try:
+                vector = get_embedding("status-check")
+                st.success(f"Embedding model: OK (dimension {len(vector)})")
+            except Exception as exc:
+                st.error(f"Embedding model: failed ({exc})")
 
 st.markdown("---")
 st.caption("developed by anurag singh | github github.com/anurag-m1 | instagram.com/ca_anuragsingh")

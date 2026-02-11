@@ -1,24 +1,68 @@
+import os
+
 from opensearchpy import OpenSearch
 
 
-def get_opensearch_client(host, port):
-    client = OpenSearch(
-        hosts=[{"host": host, "port": port}],
-        http_compress=True,
-        timeout=30,
-        max_retries=3,
-        retry_on_timeout=True,
-    )
+def _to_bool(value, default=False):
+    if value is None:
+        return default
+    return str(value).strip().lower() in {"1", "true", "yes", "on"}
 
-    if client.ping():
-        print("Connected to OpenSearch!")
-        info = client.info()
-        print(f"Cluster name: {info['cluster_name']}")
-        print(f"OpenSearch version: {info['version']['number']}")
-    else:
-        print("Connection failed!")
-        raise ConnectionError("Failed to connect to OpenSearch.")
+
+def get_opensearch_index_name():
+    return os.getenv("OPENSEARCH_INDEX", "patents")
+
+
+def get_opensearch_host():
+    return os.getenv("OPENSEARCH_HOST", "localhost")
+
+
+def get_opensearch_port():
+    try:
+        return int(os.getenv("OPENSEARCH_PORT", "9200"))
+    except ValueError:
+        return 9200
+
+
+def get_opensearch_client(host=None, port=None, check_connection=True):
+    resolved_host = host or get_opensearch_host()
+    resolved_port = int(port) if port is not None else get_opensearch_port()
+
+    use_ssl = _to_bool(os.getenv("OPENSEARCH_USE_SSL"), default=False)
+    verify_certs = _to_bool(os.getenv("OPENSEARCH_VERIFY_CERTS"), default=False)
+
+    username = os.getenv("OPENSEARCH_USERNAME")
+    password = os.getenv("OPENSEARCH_PASSWORD")
+
+    client_config = {
+        "hosts": [{"host": resolved_host, "port": resolved_port}],
+        "http_compress": True,
+        "timeout": 30,
+        "max_retries": 3,
+        "retry_on_timeout": True,
+        "use_ssl": use_ssl,
+        "verify_certs": verify_certs,
+    }
+
+    if username and password:
+        client_config["http_auth"] = (username, password)
+
+    client = OpenSearch(**client_config)
+
+    if check_connection:
+        if client.ping():
+            print("Connected to OpenSearch!")
+            info = client.info()
+            print(f"Cluster name: {info['cluster_name']}")
+            print(f"OpenSearch version: {info['version']['number']}")
+        else:
+            print("Connection failed!")
+            raise ConnectionError("Failed to connect to OpenSearch.")
     return client
+
+
+def get_default_opensearch_client(check_connection=True):
+    return get_opensearch_client(check_connection=check_connection)
 
 
 def create_index_if_not_exists(client, index_name):
@@ -76,9 +120,7 @@ def create_index_if_not_exists(client, index_name):
 
 
 if __name__ == "__main__":
-    host = "localhost"
-    port = 9200
-    client = get_opensearch_client(host, port)
+    client = get_default_opensearch_client()
 
     # List all indices
     indices = client.cat.indices(format="json")

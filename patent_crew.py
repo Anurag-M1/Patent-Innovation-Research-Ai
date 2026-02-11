@@ -14,7 +14,7 @@ from openrouter_client import (
     get_openrouter_headers,
     list_openrouter_models,
 )
-from opensearch_client import get_opensearch_client
+from opensearch_client import get_default_opensearch_client, get_opensearch_index_name
 
 DEFAULT_OPENROUTER_MODEL = os.getenv("OPENROUTER_MODEL", "qwen/qwen3-coder")
 
@@ -187,8 +187,8 @@ class SearchPatentsTool(BaseTool):
     description: str = "Search for patents matching a query"
 
     def _run(self, query: str, top_k: int = 20) -> str:
-        client = get_opensearch_client("localhost", 9200)
-        index_name = "patents"
+        client = get_default_opensearch_client()
+        index_name = get_opensearch_index_name()
 
         search_query = {
             "size": top_k,
@@ -221,8 +221,8 @@ class SearchPatentsByDateRangeTool(BaseTool):
     description: str = "Search for patents in a specific date range"
 
     def _run(self, query: str, start_date: str, end_date: str, top_k: int = 30) -> str:
-        client = get_opensearch_client("localhost", 9200)
-        index_name = "patents"
+        client = get_default_opensearch_client()
+        index_name = get_opensearch_index_name()
 
         search_query = {
             "size": top_k,

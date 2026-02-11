@@ -5,7 +5,7 @@ import requests
 from dotenv import load_dotenv
 
 from openrouter_client import get_openrouter_base_url, get_openrouter_headers
-from opensearch_client import get_opensearch_client
+from opensearch_client import get_default_opensearch_client
 from patent_crew import run_patent_analysis
 from patent_search_tools import hybrid_search, iterative_search, semantic_search, keyword_search
 
@@ -157,7 +157,7 @@ def check_system_status():
 
     # Check OpenSearch connection
     try:
-        client = get_opensearch_client("localhost", 9200)
+        client = get_default_opensearch_client()
         indices = client.cat.indices(format="json")
 
         print("✅ OpenSearch connection: OK")

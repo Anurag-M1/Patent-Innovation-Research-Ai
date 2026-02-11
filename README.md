@@ -1,35 +1,23 @@
 # Patent Research Assistant
 
-An agentic AI project for patent discovery, trend analysis, and innovation forecasting using OpenRouter, OpenSearch, and CrewAI.
+AI project for patent discovery, trend analysis, and forecasting using OpenRouter, OpenSearch, and CrewAI.
 
-[![Python](https://img.shields.io/badge/Python-3.11%2B-blue)](https://www.python.org/)
-[![OpenSearch](https://img.shields.io/badge/Search-OpenSearch-005EB8)](https://opensearch.org/)
-[![OpenRouter](https://img.shields.io/badge/LLM-OpenRouter-black)](https://openrouter.ai/)
-[![CrewAI](https://img.shields.io/badge/Agents-CrewAI-orange)](https://www.crewai.com/)
-
-## Overview
-
-This project helps you:
-- run multi-agent patent analysis for any research area
-- search patents with keyword, semantic, and hybrid retrieval
-- explore patent space iteratively
-- check OpenSearch + OpenRouter + embedding system health
-
-## New Architecture
+## Architecture
 
 ```text
 +------------------------------+
-| User Layer                   |
+| Frontend Layer               |
+| - Streamlit UI (simple_ui.py)|
 | - CLI (agentic_rag.py)       |
-| - Simple UI (simple_ui.py)   |
 +--------------+---------------+
                |
                v
 +------------------------------+
-| Orchestration Layer          |
-| - CrewAI agents              |
-| - Research / Retrieval /     |
-|   Trend / Forecast workflow  |
+| Backend API Layer            |
+| - FastAPI (backend_api.py)   |
+| - /health, /status           |
+| - /analysis, /search         |
+| - /iterative-search          |
 +--------------+---------------+
                |
                v
@@ -37,42 +25,33 @@ This project helps you:
 | Intelligence Layer           |
 | - OpenRouter chat models     |
 | - OpenRouter embeddings      |
+| - CrewAI orchestration       |
 +--------------+---------------+
                |
                v
 +------------------------------+
-| Retrieval Layer              |
-| - Keyword search             |
-| - Semantic vector search     |
-| - Hybrid and iterative search|
-+--------------+---------------+
-               |
-               v
-+------------------------------+
-| Storage Layer                |
-| - OpenSearch index: patents  |
+| Retrieval/Storage Layer      |
+| - OpenSearch (keyword/vector)|
+| - Index: patents             |
 +------------------------------+
 ```
 
-## Project Structure
+## Files
 
-- `agentic_rag.py`: CLI app
-- `simple_ui.py`: Streamlit UI
-- `patent_crew.py`: CrewAI multi-agent pipeline
-- `patent_search_tools.py`: keyword/semantic/hybrid/iterative search
-- `embedding.py`: OpenRouter embedding client
-- `openrouter_client.py`: OpenRouter auth/config helpers
-- `opensearch_client.py`: OpenSearch client + index mapping setup
-- `information_collector.py`: optional SerpAPI data fetch
-- `ingestion.py`: JSON -> embeddings -> OpenSearch indexing
+- `/Users/anurag/Desktop/PATENT INNOVATION & RESEARCH AI/backend_api.py`: backend API
+- `/Users/anurag/Desktop/PATENT INNOVATION & RESEARCH AI/simple_ui.py`: Streamlit UI
+- `/Users/anurag/Desktop/PATENT INNOVATION & RESEARCH AI/agentic_rag.py`: CLI app
+- `/Users/anurag/Desktop/PATENT INNOVATION & RESEARCH AI/patent_crew.py`: multi-agent analysis
+- `/Users/anurag/Desktop/PATENT INNOVATION & RESEARCH AI/patent_search_tools.py`: search tools
+- `/Users/anurag/Desktop/PATENT INNOVATION & RESEARCH AI/opensearch_client.py`: OpenSearch client/env config
 
-## Prerequisites
+## Requirements
 
-- Python 3.11 or 3.12
-- OpenSearch running on `localhost:9200`
+- Python 3.11+
+- OpenSearch instance
 - OpenRouter API key
 
-## Installation
+## Install
 
 ```bash
 cd '/Users/anurag/Desktop/PATENT INNOVATION & RESEARCH AI'
@@ -81,22 +60,48 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-## Configuration
+## Environment
 
-Create `.env` in project root:
+Create `/Users/anurag/Desktop/PATENT INNOVATION & RESEARCH AI/.env`:
 
 ```env
 OPENROUTER_API_KEY=your_openrouter_api_key
 OPENROUTER_MODEL=qwen/qwen3-coder
 OPENROUTER_EMBEDDING_MODEL=openai/text-embedding-3-small
 
-# Optional: only for information_collector.py
-SERPAPI_API_KEY=your_serpapi_key
+OPENSEARCH_HOST=localhost
+OPENSEARCH_PORT=9200
+OPENSEARCH_INDEX=patents
+# optional:
+# OPENSEARCH_USE_SSL=false
+# OPENSEARCH_VERIFY_CERTS=false
+# OPENSEARCH_USERNAME=
+# OPENSEARCH_PASSWORD=
+
+# optional (for UI -> backend mode)
+# BACKEND_API_URL=http://localhost:8000
 ```
 
 ## Run
 
-### CLI
+### 1) Start backend API
+
+```bash
+cd '/Users/anurag/Desktop/PATENT INNOVATION & RESEARCH AI'
+source .venv/bin/activate
+uvicorn backend_api:app --host 0.0.0.0 --port 8000
+```
+
+### 2) Start Streamlit UI (same UI, backend-enabled)
+
+```bash
+cd '/Users/anurag/Desktop/PATENT INNOVATION & RESEARCH AI'
+source .venv/bin/activate
+export BACKEND_API_URL='http://127.0.0.1:8000'
+streamlit run simple_ui.py
+```
+
+### 3) CLI mode
 
 ```bash
 cd '/Users/anurag/Desktop/PATENT INNOVATION & RESEARCH AI'
@@ -104,25 +109,11 @@ source .venv/bin/activate
 python agentic_rag.py
 ```
 
-### Simple UI
+## Notes
 
-```bash
-cd '/Users/anurag/Desktop/PATENT INNOVATION & RESEARCH AI'
-source .venv/bin/activate
-streamlit run simple_ui.py
-```
-
-## Operational Notes
-
-- Status check menu option verifies:
-  - OpenSearch connectivity
-  - OpenRouter model API connectivity
-  - embedding API response
-- If OpenSearch is not running:
-
-```bash
-brew services start opensearch
-```
+- UI layout is unchanged; only backend wiring is updated.
+- If `BACKEND_API_URL` is not set, `simple_ui.py` falls back to direct local calls.
+- For production deployment, host backend on a long-running service (not serverless runtime).
 
 ## Credits
 
