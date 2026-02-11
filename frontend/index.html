@@ -1,0 +1,434 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Patent Research Assistant</title>
+  <style>
+    :root {
+      --bg: #f4f6f8;
+      --card: #ffffff;
+      --line: #d9dee5;
+      --text: #17202a;
+      --muted: #5b6572;
+      --brand: #0f5cc0;
+      --brand-2: #0a3f86;
+      --ok: #0f8a4a;
+      --bad: #b21f2d;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background: linear-gradient(180deg, #eef2f7 0%, var(--bg) 100%);
+      color: var(--text);
+    }
+    .container {
+      max-width: 1100px;
+      margin: 24px auto;
+      padding: 0 16px;
+    }
+    .header {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 18px;
+      margin-bottom: 14px;
+    }
+    .title { margin: 0; font-size: 28px; }
+    .sub { margin: 6px 0 0; color: var(--muted); }
+    .backend-row {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 10px;
+      margin-top: 14px;
+    }
+    .tabs {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 12px;
+      flex-wrap: wrap;
+    }
+    .tab {
+      border: 1px solid var(--line);
+      background: #fff;
+      border-radius: 10px;
+      padding: 10px 14px;
+      cursor: pointer;
+      font-weight: 600;
+    }
+    .tab.active {
+      background: var(--brand);
+      color: #fff;
+      border-color: var(--brand);
+    }
+    .panel {
+      display: none;
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 16px;
+    }
+    .panel.active { display: block; }
+    .grid {
+      display: grid;
+      gap: 10px;
+    }
+    .grid-2 {
+      grid-template-columns: 1fr 1fr;
+    }
+    label {
+      display: block;
+      font-size: 13px;
+      color: var(--muted);
+      margin-bottom: 5px;
+    }
+    input, select, textarea {
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 10px 12px;
+      font-size: 14px;
+      background: #fff;
+      color: var(--text);
+    }
+    textarea { min-height: 250px; resize: vertical; }
+    .btn {
+      border: 0;
+      background: var(--brand);
+      color: #fff;
+      border-radius: 10px;
+      padding: 10px 14px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    .btn.secondary { background: var(--brand-2); }
+    .btn:disabled { opacity: 0.6; cursor: not-allowed; }
+    .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+    .msg {
+      margin: 10px 0;
+      padding: 10px 12px;
+      border-radius: 10px;
+      font-size: 14px;
+    }
+    .msg.ok { background: #e8f6ee; color: var(--ok); border: 1px solid #bde6cb; }
+    .msg.bad { background: #fdecef; color: var(--bad); border: 1px solid #f5c5cb; }
+    .results { margin-top: 12px; display: grid; gap: 10px; }
+    .card {
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 12px;
+      background: #fff;
+    }
+    .card h4 { margin: 0 0 6px; }
+    .meta { color: var(--muted); font-size: 12px; margin-bottom: 8px; }
+    .footer {
+      margin-top: 14px;
+      text-align: center;
+      color: var(--muted);
+      font-size: 12px;
+    }
+    @media (max-width: 800px) {
+      .grid-2 { grid-template-columns: 1fr; }
+      .backend-row { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1 class="title">Patent Research Assistant</h1>
+      <p class="sub">Simple UI for analysis, search, and system checks</p>
+      <div class="backend-row">
+        <div>
+          <label for="backendUrl">Backend API URL (Render)</label>
+          <input id="backendUrl" placeholder="https://your-backend.onrender.com" />
+        </div>
+        <div class="row" style="align-self:end;">
+          <button id="saveBackend" class="btn secondary">Save URL</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="tabs">
+      <button class="tab active" data-tab="analysis">Analysis</button>
+      <button class="tab" data-tab="search">Search</button>
+      <button class="tab" data-tab="iterative">Iterative</button>
+      <button class="tab" data-tab="status">System Status</button>
+    </div>
+
+    <section id="analysis" class="panel active">
+      <h3>Run Complete Patent Analysis</h3>
+      <div class="grid grid-2">
+        <div>
+          <label for="analysisArea">Research area</label>
+          <input id="analysisArea" placeholder="e.g. battery recycling" />
+        </div>
+        <div>
+          <label for="analysisModel">OpenRouter model</label>
+          <input id="analysisModel" value="qwen/qwen3-coder" />
+        </div>
+      </div>
+      <div class="row" style="margin-top:10px;">
+        <button id="runAnalysis" class="btn">Run analysis</button>
+      </div>
+      <div id="analysisMsg"></div>
+      <textarea id="analysisOutput" placeholder="Analysis output will appear here..."></textarea>
+    </section>
+
+    <section id="search" class="panel">
+      <h3>Search Patents</h3>
+      <div class="grid grid-2">
+        <div>
+          <label for="searchQuery">Search query</label>
+          <input id="searchQuery" />
+        </div>
+        <div>
+          <label for="searchType">Search type</label>
+          <select id="searchType">
+            <option value="keyword">Keyword</option>
+            <option value="semantic">Semantic</option>
+            <option value="hybrid" selected>Hybrid</option>
+          </select>
+        </div>
+      </div>
+      <div class="grid" style="margin-top:10px; max-width:200px;">
+        <div>
+          <label for="searchTopK">Top results</label>
+          <input id="searchTopK" type="number" min="1" max="100" value="20" />
+        </div>
+      </div>
+      <div class="row" style="margin-top:10px;">
+        <button id="runSearch" class="btn">Search</button>
+      </div>
+      <div id="searchMsg"></div>
+      <div id="searchResults" class="results"></div>
+    </section>
+
+    <section id="iterative" class="panel">
+      <h3>Iterative Exploration</h3>
+      <div class="grid grid-2">
+        <div>
+          <label for="iterativeQuery">Initial query</label>
+          <input id="iterativeQuery" />
+        </div>
+        <div>
+          <label for="iterativeSteps">Refinement steps</label>
+          <input id="iterativeSteps" type="number" min="1" max="12" value="3" />
+        </div>
+      </div>
+      <div class="grid" style="margin-top:10px; max-width:200px;">
+        <div>
+          <label for="iterativeTopK">Results per step</label>
+          <input id="iterativeTopK" type="number" min="1" max="100" value="20" />
+        </div>
+      </div>
+      <div class="row" style="margin-top:10px;">
+        <button id="runIterative" class="btn">Explore</button>
+      </div>
+      <div id="iterativeMsg"></div>
+      <div id="iterativeResults" class="results"></div>
+    </section>
+
+    <section id="status" class="panel">
+      <h3>System Status</h3>
+      <div class="row" style="margin-top:10px;">
+        <button id="runStatus" class="btn">Check status</button>
+      </div>
+      <div id="statusMsg"></div>
+      <div id="statusOutput"></div>
+    </section>
+
+    <div class="footer">
+      developed by anurag singh | github github.com/anurag-m1 | instagram.com/ca_anuragsingh
+    </div>
+  </div>
+
+  <script>
+    const backendInput = document.getElementById('backendUrl');
+    const saveBackendBtn = document.getElementById('saveBackend');
+    const stored = localStorage.getItem('backend_api_url') || '';
+    backendInput.value = stored;
+
+    function getBackendUrl() {
+      const value = backendInput.value.trim().replace(/\/$/, '');
+      if (!value) throw new Error('Set Backend API URL first.');
+      return value;
+    }
+
+    function setMessage(el, text, ok = false) {
+      el.innerHTML = text ? `<div class="msg ${ok ? 'ok' : 'bad'}">${text}</div>` : '';
+    }
+
+    function setLoading(btn, loading, label) {
+      btn.disabled = loading;
+      btn.textContent = loading ? 'Please wait...' : label;
+    }
+
+    function renderHits(container, hits) {
+      container.innerHTML = '';
+      if (!Array.isArray(hits) || hits.length === 0) {
+        container.innerHTML = '<div class="msg bad">No results found.</div>';
+        return;
+      }
+
+      for (const hit of hits) {
+        const src = hit._source || {};
+        const card = document.createElement('div');
+        card.className = 'card';
+        card.innerHTML = `
+          <h4>${src.title || 'Untitled patent'}</h4>
+          <div class="meta">Score: ${hit._score ?? 'N/A'} | Date: ${src.publication_date || 'N/A'} | Patent ID: ${src.patent_id || 'N/A'}</div>
+          <div>${src.abstract || ''}</div>
+        `;
+        container.appendChild(card);
+      }
+    }
+
+    async function apiGet(path) {
+      const res = await fetch(`${getBackendUrl()}${path}`);
+      if (!res.ok) {
+        const txt = await res.text();
+        throw new Error(txt || `HTTP ${res.status}`);
+      }
+      return res.json();
+    }
+
+    async function apiPost(path, payload) {
+      const res = await fetch(`${getBackendUrl()}${path}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) {
+        const txt = await res.text();
+        throw new Error(txt || `HTTP ${res.status}`);
+      }
+      return res.json();
+    }
+
+    saveBackendBtn.addEventListener('click', () => {
+      localStorage.setItem('backend_api_url', backendInput.value.trim());
+      alert('Backend URL saved');
+    });
+
+    document.querySelectorAll('.tab').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.tab').forEach((x) => x.classList.remove('active'));
+        document.querySelectorAll('.panel').forEach((x) => x.classList.remove('active'));
+        btn.classList.add('active');
+        document.getElementById(btn.dataset.tab).classList.add('active');
+      });
+    });
+
+    document.getElementById('runAnalysis').addEventListener('click', async (e) => {
+      const btn = e.currentTarget;
+      const msg = document.getElementById('analysisMsg');
+      const output = document.getElementById('analysisOutput');
+      const area = document.getElementById('analysisArea').value.trim();
+      const model = document.getElementById('analysisModel').value.trim();
+
+      if (!area) {
+        setMessage(msg, 'Research area is required.', false);
+        return;
+      }
+
+      try {
+        setLoading(btn, true, 'Run analysis');
+        setMessage(msg, 'Running analysis...', true);
+        const data = await apiPost('/analysis', { research_area: area, model_name: model || 'qwen/qwen3-coder' });
+        output.value = data.result || '';
+        setMessage(msg, 'Analysis complete.', true);
+      } catch (err) {
+        setMessage(msg, `Analysis failed: ${err.message}`, false);
+      } finally {
+        setLoading(btn, false, 'Run analysis');
+      }
+    });
+
+    document.getElementById('runSearch').addEventListener('click', async (e) => {
+      const btn = e.currentTarget;
+      const msg = document.getElementById('searchMsg');
+      const results = document.getElementById('searchResults');
+      const query = document.getElementById('searchQuery').value.trim();
+      const type = document.getElementById('searchType').value;
+      const topK = Number(document.getElementById('searchTopK').value || 20);
+
+      if (!query) {
+        setMessage(msg, 'Search query is required.', false);
+        return;
+      }
+
+      try {
+        setLoading(btn, true, 'Search');
+        setMessage(msg, 'Searching...', true);
+        const data = await apiPost('/search', { query, search_type: type, top_k: topK });
+        const hits = data.results || [];
+        setMessage(msg, `Found ${hits.length} results.`, true);
+        renderHits(results, hits);
+      } catch (err) {
+        setMessage(msg, `Search failed: ${err.message}`, false);
+      } finally {
+        setLoading(btn, false, 'Search');
+      }
+    });
+
+    document.getElementById('runIterative').addEventListener('click', async (e) => {
+      const btn = e.currentTarget;
+      const msg = document.getElementById('iterativeMsg');
+      const results = document.getElementById('iterativeResults');
+      const query = document.getElementById('iterativeQuery').value.trim();
+      const steps = Number(document.getElementById('iterativeSteps').value || 3);
+      const topK = Number(document.getElementById('iterativeTopK').value || 20);
+
+      if (!query) {
+        setMessage(msg, 'Initial query is required.', false);
+        return;
+      }
+
+      try {
+        setLoading(btn, true, 'Explore');
+        setMessage(msg, 'Exploring...', true);
+        const data = await apiPost('/iterative-search', { query, refinement_steps: steps, top_k: topK });
+        const hits = data.results || [];
+        setMessage(msg, `Found ${hits.length} results.`, true);
+        renderHits(results, hits);
+      } catch (err) {
+        setMessage(msg, `Iterative search failed: ${err.message}`, false);
+      } finally {
+        setLoading(btn, false, 'Explore');
+      }
+    });
+
+    document.getElementById('runStatus').addEventListener('click', async (e) => {
+      const btn = e.currentTarget;
+      const msg = document.getElementById('statusMsg');
+      const out = document.getElementById('statusOutput');
+      out.innerHTML = '';
+
+      try {
+        setLoading(btn, true, 'Check status');
+        setMessage(msg, 'Checking...', true);
+        const s = await apiGet('/status');
+
+        const blocks = [];
+        const add = (title, item) => {
+          const ok = item && item.ok;
+          blocks.push(`<div class="msg ${ok ? 'ok' : 'bad'}"><b>${title}</b>: ${ok ? 'OK' : 'Failed'}${item?.message ? ` - ${item.message}` : ''}</div>`);
+        };
+
+        add('OpenSearch', s.opensearch);
+        add('OpenRouter', s.openrouter);
+        add('Embedding model', s.embedding);
+
+        out.innerHTML = blocks.join('');
+        setMessage(msg, 'Status check complete.', true);
+      } catch (err) {
+        setMessage(msg, `Status failed: ${err.message}`, false);
+      } finally {
+        setLoading(btn, false, 'Check status');
+      }
+    });
+  </script>
+</body>
+</html>
