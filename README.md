@@ -87,28 +87,6 @@ export BACKEND_API_URL='http://127.0.0.1:8000'
 streamlit run simple_ui.py
 ```
 
-## Vercel Deploy (Backend)
-
-This repo includes `/Users/anurag/Desktop/PATENT INNOVATION & RESEARCH AI/main.py` as FastAPI entrypoint for Vercel.
-
-1. Import repo in Vercel.
-2. Framework preset: Other.
-3. Root directory: project root.
-4. Env vars in Vercel:
-   - `OPENROUTER_API_KEY`
-   - `OPENROUTER_MODEL=qwen/qwen3-coder`
-   - `OPENROUTER_EMBEDDING_MODEL=openai/text-embedding-3-small`
-   - `OPENSEARCH_HOST`
-   - `OPENSEARCH_PORT`
-   - `OPENSEARCH_INDEX`
-   - optional OpenSearch auth/SSL vars
-5. Redeploy.
-
-Health check endpoint:
-
-```text
-https://<your-vercel-domain>/health
-```
 
 ## Credits
 
