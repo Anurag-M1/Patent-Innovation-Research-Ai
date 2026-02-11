@@ -1,0 +1,7 @@
+opensearch-py>=2.8.0,<3.0.0
+python-dotenv
+requests
+crewai==0.126.0
+openai>=1.68.2,<1.76.0
+tiktoken
+streamlit

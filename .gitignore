@@ -1,0 +1,15 @@
+# Secrets
+.env
+
+# Virtual env
+.venv/
+
+# Python cache/build
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+
+# OS files
+.DS_Store
